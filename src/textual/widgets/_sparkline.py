@@ -102,7 +102,6 @@ class Sparkline(Widget):
         return SparklineRenderable(
             data,
             width=self.size.width,
-            height=self.size.height,
             min_color=min_color.rich_color,
             max_color=max_color.rich_color,
             summary_function=self.summary_function,

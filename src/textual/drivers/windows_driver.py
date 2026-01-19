@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Callable
 from textual.driver import Driver
 from textual.drivers import win32
 from textual.drivers._writer_thread import WriterThread
+from textual import log
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -38,6 +39,7 @@ class WindowsDriver(Driver):
         self._event_thread: Thread | None = None
         self._restore_console: Callable[[], None] | None = None
         self._writer_thread: WriterThread | None = None
+        self.supports_graphics = True
 
     @property
     def can_suspend(self) -> bool:
@@ -83,12 +85,30 @@ class WindowsDriver(Driver):
         """Disable bracketed paste mode."""
         self.write("\x1b[?2004l")
 
+    def write_update(self, update) -> None:
+        self.write(update.render_segments(self._app.console))
+
+        graphics = getattr(update, "graphics", None)
+        log("WindowsDriver GRAPHICS:", graphics)
+        if not graphics:
+            log("WindowsDriver GRAPHICS:", graphics)
+            return
+
+        for cmd in graphics:
+            log("WindowsDriver SIXEL CMD:", cmd, len(cmd.payload))
+            self.write(f"\x1b[{cmd.y + 1};{cmd.x + 1}H")
+            self.write_bytes(cmd.payload)
+
+    def write_bytes(self, data: bytes) -> None:
+        log(">>> WindowsDriver write_bytes chamado!")
+        self._writer_thread.write(data)
+
     def start_application_mode(self) -> None:
         """Start application mode."""
         loop = asyncio.get_running_loop()
 
         self._restore_console = win32.enable_application_mode()
-
+        log(">>> WindowsDriver start_application_mode chamado!")
         self._writer_thread = WriterThread(self._file)
         self._writer_thread.start()
 
@@ -96,7 +116,8 @@ class WindowsDriver(Driver):
         self._enable_mouse_support()
         self.write("\x1b[?25l")  # Hide cursor
         self.write("\033[?1004h")  # Enable FocusIn/FocusOut.
-        self.write("\x1b[>1u")  # https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+        # https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+        self.write("\x1b[>1u")
         self.flush()
         self._enable_bracketed_paste()
 
@@ -136,6 +157,7 @@ class WindowsDriver(Driver):
     def close(self) -> None:
         """Perform cleanup."""
         if self._writer_thread is not None:
-            self._writer_thread.stop()
+            if self._writer_thread.is_alive():
+                self._writer_thread.stop()
         if self._restore_console:
             self._restore_console()

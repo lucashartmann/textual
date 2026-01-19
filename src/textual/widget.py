@@ -429,6 +429,7 @@ class Widget(DOMNode):
             disabled: Whether the widget is disabled or not.
             markup: Enable content markup?
         """
+        self.preserve_graphics = False
         self._render_markup = markup
         _null_size = NULL_SIZE
         self._size = _null_size
@@ -1140,32 +1141,19 @@ class Widget(DOMNode):
                 return child
         raise NoMatches(f"No immediate child of type {expect_type}; {self._nodes}")
 
-    def get_component_rich_style(
-        self, *names: str, partial: bool = False, default: Style | None = None
-    ) -> Style:
+    def get_component_rich_style(self, *names: str, partial: bool = False) -> Style:
         """Get a *Rich* style for a component.
 
         Args:
             names: Names of components.
             partial: Return a partial style (not combined with parent).
-            default: A Style to return if any component style doesn't exist.
-
-        Raises:
-            KeyError: If a component style doesn't exist, and no `default` is provided.
 
         Returns:
             A Rich style object.
         """
 
         if names not in self._rich_style_cache:
-            if default is None:
-                component_styles = self.get_component_styles(*names)
-            else:
-                try:
-                    component_styles = self.get_component_styles(*names)
-                except KeyError:
-                    return default
-
+            component_styles = self.get_component_styles(*names)
             style = component_styles.rich_style
             text_opacity = component_styles.text_opacity
             if text_opacity < 1 and style.bgcolor is not None:
@@ -4226,12 +4214,7 @@ class Widget(DOMNode):
         Returns:
             A list of list of segments.
         """
-        if self.BLANK:
-            strips = [
-                Strip.blank(crop.width, self.visual_style.rich_style)
-            ] * crop.height
-        else:
-            strips = self._styles_cache.render_widget(self, crop)
+        strips = self._styles_cache.render_widget(self, crop)
         return strips
 
     def get_style_at(self, x: int, y: int) -> Style:
@@ -4404,6 +4387,9 @@ class Widget(DOMNode):
                 return self.layout.render_keyline(self)
             else:
                 return Blank(self.background_colors[1])
+        if self.preserve_graphics:
+            # Pular pintura do fundo se preserve_graphics=True
+            return self._render_content()
         return self.css_identifier_styled
 
     def _render(self) -> Visual:

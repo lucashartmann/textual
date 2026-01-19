@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import TYPE_CHECKING
 
 from rich.cells import cell_len
 from rich.console import Console, RenderableType

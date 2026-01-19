@@ -191,6 +191,12 @@ class Driver(ABC):
 
     def close(self) -> None:
         """Perform any final cleanup."""
+        
+    def write_update(self, update: messages.Update) -> None:
+        raise NotImplementedError
+
+    def write_bytes(self, data: bytes) -> None:
+        raise NotImplementedError
 
     def open_url(self, url: str, new_tab: bool = True) -> None:
         """Open a URL in the default web browser.
@@ -235,7 +241,7 @@ class Driver(ABC):
             mime_type: *web only* The MIME type of the file. This will be used to
                 set the `Content-Type` header in the HTTP response.
             name: A user-defined name which will be returned in [`DeliveryComplete`][textual.events.DeliveryComplete]
-                and [`DeliveryFailed`][textual.events.DeliveryFailed].
+                and [`DeliveryComplete`][textual.events.DeliveryComplete].
 
         """
 

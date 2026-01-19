@@ -524,7 +524,7 @@ class CommandPalette(SystemModalScreen[None]):
 
     AUTO_FOCUS = "CommandInput"
 
-    COMPONENT_CLASSES: ClassVar[set[str]] = Screen.COMPONENT_CLASSES | {
+    COMPONENT_CLASSES: ClassVar[set[str]] = {
         "command-palette--help-text",
         "command-palette--highlight",
     }

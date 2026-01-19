@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 from queue import Queue
-from typing import IO
+from typing import TextIO
 
 from typing_extensions import Final
 
@@ -12,10 +12,14 @@ MAX_QUEUED_WRITES: Final[int] = 30
 class WriterThread(threading.Thread):
     """A thread / file-like to do writes to stdout in the background."""
 
-    def __init__(self, file: IO[str]) -> None:
+    def __init__(self, file: TextIO) -> None:
         super().__init__(daemon=True, name="textual-output")
-        self._queue: Queue[str | None] = Queue(MAX_QUEUED_WRITES)
+        self._queue: Queue[str | bytes | None] = Queue(MAX_QUEUED_WRITES)
         self._file = file
+        self._graphics_callback = None
+
+    def set_graphics_callback(self, callback) -> None:
+        self._graphics_callback = callback
 
     def write(self, text: str) -> None:
         """Write text. Text will be enqueued for writing.
@@ -24,6 +28,10 @@ class WriterThread(threading.Thread):
             text: Text to write to the file.
         """
         self._queue.put(text)
+
+    def write_bytes(self, data: bytes) -> None:
+        """Write raw bytes (e.g. SIXEL)."""
+        self._queue.put(data)
 
     def isatty(self) -> bool:
         """Pretend to be a terminal.
@@ -45,21 +53,28 @@ class WriterThread(threading.Thread):
         """Flush the file (a no-op, because flush is done in the thread)."""
         return
 
-    def run(self) -> None:
-        """Run the thread."""
+    def run(self):
         write = self._file.write
+        write_bytes = self._file.buffer.write
         flush = self._file.flush
-        get = self._queue.get
-        qsize = self._queue.qsize
-        # Read from the queue, write to the file.
-        # Flush when there is a break.
+
         while True:
-            text: str | None = get()
-            if text is None:
+            item = self._queue.get()
+            if item is None:
                 break
-            write(text)
-            if qsize() == 0:
+
+            if isinstance(item, bytes):
                 flush()
+                write_bytes(item)
+            else:
+                write(item)
+
+            if self._queue.empty():
+                flush()
+
+                if self._graphics_callback:
+                    self._graphics_callback()
+
         flush()
 
     def stop(self) -> None:

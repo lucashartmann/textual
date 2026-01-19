@@ -3723,21 +3723,18 @@ class App(Generic[ReturnType], DOMNode):
                             else:
                                 terminal_sequence = renderable.render_segments(console)
 
-                            # ⬇ Escrita NORMAL (texto)
                             self._driver.write(terminal_sequence)
 
-                            # ⬇ Escrita BINÁRIA (SIXEL / gráficos)
                             graphics = getattr(renderable, "graphics", None)
                             if graphics:
-                                log(f"🟢 Graphics detectado: {len(graphics)} comandos")
+                                log(f"Graphics detectado: {len(graphics)} comandos")
                                 for cmd in graphics:
-                                    log(f"🟢 Escrevendo SIXEL em ({cmd.x},{cmd.y}) | {len(cmd.payload)} bytes")
+                                    log(f"Escrevendo SIXEL em ({cmd.x},{cmd.y}) | {len(cmd.payload)} bytes")
                                     self._driver.write(
                                         Control.move_to(cmd.x, cmd.y).segment.text
                                     )
                                     self._driver.write_bytes(cmd.payload)
-
-                            # ⬇ Restaurar cursor UMA VEZ
+                                    
                             self._driver.write(
                                 Control.move_to(*cursor_position).segment.text
                             )

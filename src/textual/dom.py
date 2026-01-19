@@ -25,6 +25,7 @@ from typing import (
 
 import rich.repr
 from rich.highlighter import ReprHighlighter
+from rich.style import NULL_STYLE as RICH_NULL_STYLE
 from rich.style import Style
 from rich.text import Text
 from rich.tree import Tree
@@ -1072,7 +1073,9 @@ class DOMNode(MessagePump):
     @property
     def selection_style(self) -> Style:
         """The style of selected text."""
-        style = self.screen.get_component_rich_style("screen--selection")
+        style = self.screen.get_component_rich_style(
+            "screen--selection", default=RICH_NULL_STYLE
+        )
         return style
 
     @property
@@ -1525,6 +1528,43 @@ class DOMNode(MessagePump):
             return node
 
         raise NoMatches(f"No nodes match {query_selector!r} on {base_node!r}")
+
+    if TYPE_CHECKING:
+
+        @overload
+        def query_one_optional(self, selector: str) -> Widget | None: ...
+
+        @overload
+        def query_one_optional(self, selector: type[QueryType]) -> QueryType | None: ...
+
+        @overload
+        def query_one_optional(
+            self, selector: str, expect_type: type[QueryType]
+        ) -> QueryType | None: ...
+
+    def query_one_optional(
+        self,
+        selector: str | type[QueryType],
+        expect_type: type[QueryType] | None = None,
+    ) -> QueryType | Widget | None:
+        """Get a widget from this widget's children that matches a selector or widget type,
+        or `None` if there is no match.
+
+        Args:
+            selector: A selector or widget type.
+            expect_type: Require the object be of the supplied type, or None for any type.
+
+        Raises:
+            WrongType: If the wrong type was found.
+
+        Returns:
+            A widget matching the selector, or `None`.
+        """
+        try:
+            widget = self.query_one(selector, expect_type)
+        except NoMatches:
+            return None
+        return widget
 
     if TYPE_CHECKING:
 

@@ -19,7 +19,7 @@ def image_to_sixels_responsive(
     px_per_cell_y: int = 18
 ) -> str:
     target_w = cell_width * px_per_cell_x
-    target_h = cell_height * px_per_cell_y
+    target_h = cell_height * px_per_cell_y 
 
     img = image.resize((target_w, target_h), PILImage.Resampling.LANCZOS)
     w, h = img.size

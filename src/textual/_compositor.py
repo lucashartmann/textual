@@ -209,8 +209,8 @@ class ChopsUpdate(CompositorUpdate):
 
         _cell_len = cell_len
         for y, x1, x2 in self.spans:
-            if self._intersects_graphics_span(y, x1, x2):
-                continue
+            # if self._intersects_graphics_span(y, x1, x2):
+            #     continue
             line = chops[y]
             ends = chop_ends[y]
             for end, (x, strip) in zip(ends, line.items()):
@@ -267,8 +267,8 @@ class ChopsUpdate(CompositorUpdate):
         last_y = self.spans[-1][0]
 
         for y, x1, x2 in self.spans:
-            if self._intersects_graphics_span(y, x1, x2):
-                continue
+            # if self._intersects_graphics_span(y, x1, x2):
+            #     continue
             line = chops[y]
             ends = chop_ends[y]
             for end, (x, strip) in zip(ends, line.items()):
@@ -470,7 +470,8 @@ class Compositor:
                 )
                 if region
             }
-            self._dirty_regions.update(regions)
+    
+        self._dirty_regions.update(regions)
 
         resized_widgets = {
             widget
@@ -482,6 +483,7 @@ class Compositor:
             shown=shown_widgets,
             resized=resized_widgets,
         )
+        
 
     def reflow_visible(self, parent: Widget, size: Size) -> set[Widget]:
         """Reflow only the visible children.
@@ -1357,8 +1359,8 @@ class Compositor:
             for dirty_region in widget._exchange_repaint_regions():
                 candidate = intersection(dirty_region.translate(offset))
 
-                if self._intersects_graphics(candidate):
-                    continue
+                # if self._intersects_graphics(candidate):
+                #     continue
 
                 if update_region := intersection(dirty_region.translate(offset)):
                     add_region(update_region)

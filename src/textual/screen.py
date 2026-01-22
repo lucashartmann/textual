@@ -1302,6 +1302,24 @@ class Screen(Generic[ScreenResultType], Widget):
     def _pop_result_callback(self) -> None:
         """Remove the latest result callback from the stack."""
         self._result_callbacks.pop()
+        
+    
+        
+    def _clear_graphic_region(self, widget: Widget) -> None:
+        cr = widget.content_region
+        if not cr:
+            return
+        
+        log(f"Limpando área gráfica: {widget} em {cr}")
+        
+        # Limpa com ESPAÇOS, não com SIXEL
+        for line in range(cr.height):
+            pos = f"\x1b[{cr.y + line + 1};{cr.x + 1}H"
+            blank_line = " " * cr.width
+            self.app._driver.write(pos + blank_line)
+        
+        self.app._driver.flush()
+        self._compositor.unregister_graphic_region(widget)
 
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
@@ -1344,8 +1362,34 @@ class Screen(Generic[ScreenResultType], Widget):
                                 widget, "_repaint_graphics", None)
                             log("_refresh_layout if widget in compositor._graphic_regions")
                             if repaint is not None:
-                                self.call_after_refresh(repaint)
-                                log("_refresh_layout if repaint is not None")
+                                def check_and_repaint():
+                                    viewport_top = self.scroll_offset.y
+                                    viewport_bottom = viewport_top + self.size.height
+
+                                    for widget in self.walk_children():
+                                        if not getattr(widget, "preserve_graphics", False):
+                                            continue
+
+                                        virtual_region = widget.virtual_region
+                                        if not virtual_region:
+                                            continue
+                                            
+                                        widget_top = virtual_region.y
+                                        widget_bottom = widget_top + virtual_region.height
+                                        is_visible = not (widget_bottom <= viewport_top or widget_top >= viewport_bottom)
+
+                                        if is_visible:
+                                            if hasattr(widget, '_last_content_region'):
+                                                widget._last_content_region = None
+                                            
+                                            repaint = getattr(widget, "_repaint_graphics", None)
+                                            if repaint:
+                                                self.set_timer(0.50, repaint)
+                                        # else:
+                                        #     self._clear_graphic_region(widget)
+
+                                self.call_after_refresh(check_and_repaint)
+                                # self.set_timer(0.15, check_and_repaint)  
 
             else:
                 hidden, shown, resized = self._compositor.reflow(self, size)

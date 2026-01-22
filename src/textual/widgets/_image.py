@@ -1,36 +1,58 @@
 from PIL import Image as PILImage
-from textual.widget import Widget
-from textual.drivers.graphics import GraphicsCommand
-from textual.drivers._sixel import image_to_sixels_responsive
+from textual.drivers.image_render import RenderType, draw, get_renderer
 from textual import events, log, on
+from textual.geometry import Size
+from textual.widgets._graphic import Graphic
+import io
 
+class Image(Graphic):
 
-class Image(Widget):
+    PRESERVE_ON_RESIZE = True
 
-    def __init__(self, image_path_or_pil=None, **kwargs):
-        super().__init__(**kwargs)
-        if image_path_or_pil:
-            if isinstance(image_path_or_pil, PILImage.Image):
-                self.pil_image = image_path_or_pil
+    def __init__(self, image:str|bytes|PILImage.Image, render_type: RenderType = RenderType.AUTO, **kwargs):
+        super().__init__(render_type=render_type, **kwargs)
+        if image:
+            if isinstance(image, PILImage.Image):
+                self.image = image
+            elif isinstance(image, bytes):
+                self.image = PILImage.open(io.BytesIO(image))
             else:
-                self.pil_image = PILImage.open(image_path_or_pil)
+                self.image = PILImage.open(image)
         self.preserve_graphics = True
         self._sixel_scheduled = False
+        self._renderer = None
+        self._renderer_type = None
+
+        if render_type:
+            self._renderer = get_renderer(render_type)
+            
+    def _size_updated(
+        self, size: Size, virtual_size: Size, container_size: Size, layout: bool = False
+    ) -> bool:
+        
+                
+        compositor = self.screen._compositor
+        log(f"_size_updated region {self.region}")
+        if hasattr(compositor, '_dirty_regions') and self.region:
+                log(f"compositor._dirty_regions.discard(self.region)")
+                compositor._dirty_regions.discard(self.region)
+                compositor._dirty_regions.discard(self.content_region)
 
     def render(self) -> str:
         cr = self.content_region
         if not cr:
             return ""
         return "\n".join(" " * cr.width for _ in range(cr.height))
+    
 
     def on_mount(self) -> None:
         self._schedule_sixel_redraw()
 
     def on_unmount(self) -> None:
+        self.image.close()
         self.app.screen._compositor.unregister_graphic_region(self)
 
     def _repaint_graphics(self) -> None:
-        log("_repaint_graphics chamado")
         self._schedule_sixel_redraw()
 
     def _schedule_sixel_redraw(self) -> None:
@@ -39,66 +61,26 @@ class Image(Widget):
         self._sixel_scheduled = True
         self.call_after_refresh(self._send_sixel)
 
-    @on(events.Resize)
-    def _on_resize(self, event: events.Resize) -> None:
-        self._schedule_sixel_redraw()
 
     def _send_sixel(self) -> None:
         self._sixel_scheduled = False
-        if not self.region or not self.pil_image:
-            log("ERRO: region ou pil_image não existe")
+        if not self.region or not self.image:
+            log("ERRO: region ou image não existe")
+            return
+        
+        image = self.image
+        if image is None:
             return
 
         cr = self.content_region
-
-        log(f"Content region: x={cr.x}, y={cr.y}, width={cr.width}, height={cr.height}")
-
-        sixel = image_to_sixels_responsive(
-            self.pil_image,
-            cell_width=cr.width,
-            cell_height=cr.height,
-            px_per_cell_x=10,
-            px_per_cell_y=20,
-        )
-
-        if not sixel:
-            log("ERRO: sixel está vazio")
+        if not cr or cr.width <= 0 or cr.height <= 0:
             return
 
-        log(f"Sixel gerado com sucesso, tamanho: {len(sixel)}")
+        driver = self.app._driver
 
-        cmd = GraphicsCommand(
-            x=cr.x,
-            y=cr.y,
-            payload=sixel.encode("ascii"),
-        )
+        renderer = self._renderer
+        if not renderer:
+            return
 
-        log(f"Chamando write_graphics com x={cr.x}, y={cr.y}")
-        self.app._driver.write_graphics([cmd])
+        draw(renderer, driver, cr, image)
         self.app.screen._compositor.register_graphic_region(self, cr)
-        log("write_graphics chamado com sucesso")
-
-    def get_graphics(self) -> list[GraphicsCommand]:
-        if not hasattr(self, 'pil_image') or not self.pil_image:
-            return []
-
-        cr = self.content_region
-
-        sixel = image_to_sixels_responsive(
-            self.pil_image,
-            cell_width=cr.width,
-            cell_height=cr.height,
-            px_per_cell_x=10,
-            px_per_cell_y=20,
-        )
-
-        if not sixel:
-            return []
-
-        return [
-            GraphicsCommand(
-                x=cr.x,
-                y=cr.y,
-                payload=sixel.encode("ascii"),
-            )
-        ]

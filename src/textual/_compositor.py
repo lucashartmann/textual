@@ -418,15 +418,7 @@ class Compositor:
         yield "widgets", self.widgets
 
     def reflow(self, parent: Widget, size: Size) -> ReflowResult:
-        """Reflow (layout) widget and its children.
-
-        Args:
-            parent: The root widget.
-            size: Size of the area to be filled.
-
-        Returns:
-            Hidden, shown, and resized widgets.
-        """
+        """Reflow (layout) widget and its children."""
         self._cuts = None
         self._layers = None
         self._layers_visible = None
@@ -435,55 +427,117 @@ class Compositor:
         self.root = parent
         self.size = size
 
-        # Keep a copy of the old map because we're going to compare it with the update
         old_map = self._full_map
         old_widgets = old_map.keys()
 
         map, widgets = self._arrange_root(parent, size, visible_only=False)
 
         new_widgets = map.keys()
-
-        # Newly visible widgets
         shown_widgets = new_widgets - old_widgets
-
-        # Newly hidden widgets
         hidden_widgets = self.widgets - widgets
 
-        # Replace map and widgets
         self._full_map = map
         self.widgets = widgets
 
-        # Contains widgets + geometry for every widget that changed (added, removed, or updated)
         changes = map.items() ^ old_map.items()
 
-        # Widgets in both new and old
-        common_widgets = old_widgets & new_widgets
+        protected_regions = list(self._graphic_regions.values())
+        dirty_regions = set()
 
-        # Mark dirty regions.
-        screen_region = size.region
-        if screen_region not in self._dirty_regions:
-            regions = {
-                region
-                for region in (
-                    map_geometry.clip.intersection(map_geometry.region)
-                    for _, map_geometry in changes
-                )
-                if region
-            }
-    
-        self._dirty_regions.update(regions)
+        for widget, map_geometry in changes:
+            candidate = map_geometry.clip.intersection(map_geometry.region)
+            if not candidate:
+                continue
+
+            if widget is self.root and protected_regions:
+                log(f"Reflow: processando raiz com proteção")
+
+                remaining = [candidate]
+
+                for protected in protected_regions:
+                    new_remaining = []
+                    for region in remaining:
+                        if not region.overlaps(protected):
+                            new_remaining.append(region)
+                        else:
+                            parts = self._split_region_around(
+                                region, protected)
+                            new_remaining.extend(parts)
+                    remaining = new_remaining
+
+                dirty_regions.update(remaining)
+                log(f"Reflow: raiz dividida em {len(remaining)} regiões")
+                continue
+
+            if protected_regions:
+                intersects = any(candidate.overlaps(prot)
+                                 for prot in protected_regions)
+                if intersects:
+                    log(f"Reflow: {widget} intersecta graphics, ignorando")
+                    continue
+
+            dirty_regions.add(candidate)
+
+        self._dirty_regions.update(dirty_regions)
+        log(f"Reflow: {len(dirty_regions)} dirty regions marcadas")
 
         resized_widgets = {
             widget
             for widget, (region, *_) in changes
-            if (widget in common_widgets and old_map[widget].region.size != region.size)
+            if (widget in old_widgets & new_widgets and old_map[widget].region.size != region.size)
         }
+
         return ReflowResult(
             hidden=hidden_widgets,
             shown=shown_widgets,
             resized=resized_widgets,
         )
-        
+
+    def _split_region_around(self, region: Region, protected: Region) -> list[Region]:
+        parts = []
+
+        if not region.overlaps(protected):
+            return [region]
+
+        if region.y < protected.y:
+            parts.append(Region(
+                region.x,
+                region.y,
+                region.width,
+                protected.y - region.y
+            ))
+
+        if region.y + region.height > protected.y + protected.height:
+            parts.append(Region(
+                region.x,
+                protected.y + protected.height,
+                region.width,
+                (region.y + region.height) - (protected.y + protected.height)
+            ))
+
+        overlap_y = max(region.y, protected.y)
+        overlap_height = min(region.y + region.height,
+                             protected.y + protected.height) - overlap_y
+
+        if region.x < protected.x and overlap_height > 0:
+            parts.append(Region(
+                region.x,
+                overlap_y,
+                protected.x - region.x,
+                overlap_height
+            ))
+
+        if region.x + region.width > protected.x + protected.width and overlap_height > 0:
+            # A parte à direita da região protegida
+            right_x = protected.x + protected.width  # Começa onde a protegida termina
+            parts.append(Region(
+                right_x,  # ✅ Posição X correta
+                overlap_y,
+                (region.x + region.width) - right_x,  # Largura do que sobrou
+                overlap_height
+            ))
+
+        return [p for p in parts if p.width > 0 and p.height > 0]
 
     def reflow_visible(self, parent: Widget, size: Size) -> set[Widget]:
         """Reflow only the visible children.
@@ -1359,8 +1413,8 @@ class Compositor:
             for dirty_region in widget._exchange_repaint_regions():
                 candidate = intersection(dirty_region.translate(offset))
 
-                # if self._intersects_graphics(candidate):
-                #     continue
+                if self._intersects_graphics(candidate):
+                    continue
 
                 if update_region := intersection(dirty_region.translate(offset)):
                     add_region(update_region)

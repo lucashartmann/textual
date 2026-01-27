@@ -17,6 +17,7 @@ from textual.reactive import reactive, var
 from textual.suggester import SuggestFromList
 from textual.theme import BUILTIN_THEMES
 from textual.widgets import (
+    Im
     Button,
     Checkbox,
     DataTable,

@@ -3715,31 +3715,19 @@ class App(Generic[ReturnType], DOMNode):
                             cursor_position = self.screen.outer_size.clamp_offset(
                                 self.cursor_position
                             )
-
                             if self._driver.is_inline:
                                 terminal_sequence = Control.move(
                                     *(-self._previous_cursor_position)
                                 ).segment.text
                                 terminal_sequence += renderable.render_segments(console)
+                                terminal_sequence += Control.move(
+                                    *cursor_position
+                                ).segment.text
                             else:
                                 terminal_sequence = renderable.render_segments(console)
-
-                            self._driver.write(terminal_sequence)
-
-                            graphics = getattr(renderable, "graphics", None)
-                            if graphics:
-                                log(f"Graphics detectado: {len(graphics)} comandos")
-                                for cmd in graphics:
-                                    log(f"Escrevendo SIXEL em ({cmd.x},{cmd.y}) | {len(cmd.payload)} bytes")
-                                    self._driver.write(
-                                        Control.move_to(cmd.x, cmd.y).segment.text
-                                    )
-                                    self._driver.write_bytes(cmd.payload)
-                                    
-                            self._driver.write(
-                                Control.move_to(*cursor_position).segment.text
-                            )
-
+                                terminal_sequence += Control.move_to(
+                                    *cursor_position
+                                ).segment.text
                             self._previous_cursor_position = cursor_position
                         else:
                             segments = console.render(renderable)

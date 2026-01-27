@@ -1,4 +1,6 @@
 # This stub file must re-export every classes exposed in the __init__.py's `__all__` list:
+from ._image import Image as Image
+from ._video import Video as Video
 from ._button import Button as Button
 from ._checkbox import Checkbox as Checkbox
 from ._collapsible import Collapsible as Collapsible

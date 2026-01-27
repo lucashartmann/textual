@@ -11,6 +11,8 @@ from textual.case import camel_to_snake
 if typing.TYPE_CHECKING:
     from textual.widget import Widget
     from textual.widgets._button import Button
+    from textual.widgets._image import Image
+    from textual.widgets._video import Video
     from textual.widgets._checkbox import Checkbox
     from textual.widgets._collapsible import Collapsible
     from textual.widgets._content_switcher import ContentSwitcher
@@ -51,6 +53,8 @@ if typing.TYPE_CHECKING:
     from textual.widgets._welcome import Welcome
 
 __all__ = [
+    "Video",
+    "Image",
     "Button",
     "Checkbox",
     "Collapsible",

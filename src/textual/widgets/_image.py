@@ -1,7 +1,6 @@
 from PIL import Image as PILImage
 from textual.drivers.image_render import RenderType, draw, get_renderer
-from textual import events, log, on
-from textual.geometry import Size, Region
+from textual import log
 from textual.widgets._graphic import Graphic
 import io
 
@@ -18,10 +17,11 @@ class Image(Graphic):
             else:
                 self.image = PILImage.open(image)
         self.preserve_graphics = True
-        self._sixel_scheduled = False
+        self._image_scheduled = False
         self._renderer = None
         self._renderer_type = None
-        self._last_sixel_region = None
+        self._last_image_region = None
+        self.can_focus = True
 
         if render_type:
             self._renderer = get_renderer(render_type)
@@ -33,26 +33,26 @@ class Image(Graphic):
         return "\n".join(" " * cr.width for _ in range(cr.height))
 
     def _size_updated(self, region_size, virtual_size, container_size, layout=False):
-        self.call_after_refresh(self._send_sixel)
+        self.call_after_refresh(self._send_image)
 
     # @on(events.Resize)
     # def resize(self):
-    #     self.call_after_refresh(self._send_sixel)
+    #     self.call_after_refresh(self._send_image)
 
     def on_mount(self) -> None:
-        self.call_after_refresh(self._send_sixel)
+        self.call_after_refresh(self._send_image)
 
     def on_unmount(self) -> None:
         self.image.close()
-        self.app.screen._compositor.unregister_graphic_region(self)
+        if hasattr(self.app, "screen") and hasattr(self.app.screen, "_compositor"):
+            self.app.screen._compositor._dirty_regions.add(
+                self._last_image_region)
 
     def _repaint_graphics(self) -> None:
-        """Called by compositor when graphics need to be repainted."""
-        log("Image._repaint_graphics called - scheduling sixel redraw")
-        self.call_after_refresh(self._send_sixel)
+        self.call_after_refresh(self._send_image)
 
-    def _send_sixel(self) -> None:
-        self._sixel_scheduled = False
+    def _send_image(self) -> None:
+        self._image_scheduled = False
         if not self.region or not self.image:
             log("ERRO: region ou image não existe")
             return
@@ -67,8 +67,8 @@ class Image(Graphic):
 
         compositor = self.app.screen._compositor
 
-        region_changed = (self._last_sixel_region is not None and
-                          self._last_sixel_region != cr)
+        region_changed = (self._last_image_region is not None and
+                          self._last_image_region != cr)
 
         viewport_top = self.app.screen.scroll_offset.y
         viewport_bottom = viewport_top + self.app.screen.size.height
@@ -78,10 +78,8 @@ class Image(Graphic):
         is_visible = not (
             widget_bottom <= viewport_top or widget_top >= viewport_bottom)
 
-        if region_changed:
-            log(f"Content region moveu de {self._last_sixel_region} para {cr}")
-            compositor._dirty_regions.add(self._last_sixel_region)
-            
+        if region_changed or not is_visible:
+            compositor._dirty_regions.add(self._last_image_region)
 
         driver = self.app._driver
         renderer = self._renderer
@@ -90,6 +88,4 @@ class Image(Graphic):
 
         if is_visible:
             draw(renderer, driver, cr, image)
-            self._last_sixel_region = cr
-            log(
-                f"SIXEL desenhado e registrado em content_region={cr} (widget region={self.region})")
+            self._last_image_region = cr

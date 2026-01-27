@@ -27,6 +27,7 @@ class WriterThread(threading.Thread):
         Args:
             text: Text to write to the file.
         """
+        
         self._queue.put(text)
 
     def write_bytes(self, data: bytes) -> None:

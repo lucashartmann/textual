@@ -30,7 +30,7 @@ import rich.repr
 from rich.console import RenderableType
 from rich.style import Style
 
-from textual import constants, errors, events, log, messages
+from textual import constants, errors, events, messages
 from textual._arrange import arrange
 from textual._callback import invoke
 from textual._compositor import Compositor, MapGeometry
@@ -48,6 +48,7 @@ from textual.binding import ActiveBinding, Binding, BindingsMap
 from textual.css.match import match
 from textual.css.parse import parse_selectors
 from textual.css.query import NoMatches, QueryType
+from textual.css.styles import PointerShape
 from textual.dom import DOMNode
 from textual.errors import NoWidget
 from textual.geometry import NULL_OFFSET, Offset, Region, Size
@@ -62,7 +63,6 @@ from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Tooltip
 from textual.widgets._toast import ToastRack
-from textual.custom_messages import GraphicsUpdate
 
 if TYPE_CHECKING:
     from typing_extensions import Final
@@ -230,8 +230,7 @@ class Screen(Generic[ScreenResultType], Widget):
     title: Reactive[str | None] = Reactive(None, compute=False)
     """Screen title to override [the app title][textual.app.App.title]."""
 
-    COMMANDS: ClassVar[set[type[Provider] |
-                           Callable[[], type[Provider]]]] = set()
+    COMMANDS: ClassVar[set[type[Provider] | Callable[[], type[Provider]]]] = set()
     """Command providers used by the [command palette](/guide/command_palette), associated with the screen.
 
     Should be a set of [`command.Provider`][textual.command.Provider] classes.
@@ -255,22 +254,21 @@ class Screen(Generic[ScreenResultType], Widget):
     _box_select = var(False)
     """Should text selection be limited to a box?"""
 
-    _select_start: Reactive[tuple[Widget,
-                                  Offset, Offset] | None] = Reactive(None)
+    _select_start: Reactive[tuple[Widget, Offset, Offset] | None] = Reactive(None)
     """Tuple of (widget, screen offset, text offset) where selection started."""
-    _select_end: Reactive[tuple[Widget, Offset, Offset]
-                          | None] = Reactive(None)
+    _select_end: Reactive[tuple[Widget, Offset, Offset] | None] = Reactive(None)
     """Tuple of (widget, screen offset, text offset) where selection ends."""
 
     _mouse_down_offset: var[Offset | None] = var(None)
     """Last mouse down screen offset, or `None` if the mouse is up."""
 
+    _pointer_shape: var[PointerShape] = var("default")
+    """The current mouse pointer shape."""
+
     BINDINGS = [
         Binding("tab", "app.focus_next", "Focus Next", show=False),
-        Binding("shift+tab", "app.focus_previous",
-                "Focus Previous", show=False),
-        Binding("ctrl+c", "screen.copy_text",
-                "Copy selected text", show=False),
+        Binding("shift+tab", "app.focus_previous", "Focus Previous", show=False),
+        Binding("ctrl+c,super+c", "screen.copy_text", "Copy selected text", show=False),
     ]
 
     def __init__(
@@ -287,17 +285,13 @@ class Screen(Generic[ScreenResultType], Widget):
             id: The ID of the screen in the DOM.
             classes: The CSS classes for the screen.
         """
-        self.graphics_regions = {}
-        self._graphics_updated = False
-        self._graphics_updated = False
         self._modal = False
         super().__init__(name=name, id=id, classes=classes)
         self._compositor = Compositor()
         self._dirty_widgets: set[Widget] = set()
         self.__update_timer: Timer | None = None
         self._callbacks: list[tuple[CallbackType, MessagePump]] = []
-        self._result_callbacks: list[ResultCallback[ScreenResultType | None]] = [
-        ]
+        self._result_callbacks: list[ResultCallback[ScreenResultType | None]] = []
 
         self._tooltip_widget: Widget | None = None
         self._tooltip_timer: Timer | None = None
@@ -320,8 +314,7 @@ class Screen(Generic[ScreenResultType], Widget):
         )
         """The signal that is published when the screen's layout is refreshed."""
 
-        self.bindings_updated_signal: Signal[Screen] = Signal(
-            self, "bindings_updated")
+        self.bindings_updated_signal: Signal[Screen] = Signal(self, "bindings_updated")
         """A signal published when the bindings have been updated"""
 
         self.text_selection_started_signal: Signal[Screen] = Signal(
@@ -444,8 +437,7 @@ class Screen(Generic[ScreenResultType], Widget):
             if keymap:
                 result = bindings_map.apply_keymap(keymap)
                 if result.clashed_bindings:
-                    self.app.handle_bindings_clash(
-                        result.clashed_bindings, namespace)
+                    self.app.handle_bindings_clash(result.clashed_bindings, namespace)
 
         return namespace_bindings
 
@@ -475,8 +467,7 @@ class Screen(Generic[ScreenResultType], Widget):
         for namespace, bindings in self._modal_binding_chain:
             for key, binding in bindings:
                 # This will call the nodes `check_action` method.
-                action_state = app._check_action_state(
-                    binding.action, namespace)
+                action_state = app._check_action_state(binding.action, namespace)
                 if action_state is False:
                     # An action_state of False indicates the action is disabled and not shown
                     # Note that None has a different meaning, which is why there is an `is False`
@@ -538,8 +529,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 *self.query_children(".-textual-system"),
             }
             # Restore order of widgets.
-            maximize_widgets = [
-                widget for widget in self.children if widget in widgets]
+            maximize_widgets = [widget for widget in self.children if widget in widgets]
             # Add the maximized widget, if its not already included
             if maximized not in maximize_widgets:
                 maximize_widgets.insert(0, maximized)
@@ -582,6 +572,26 @@ class Screen(Generic[ScreenResultType], Widget):
         """
         loading_widget = self.app.get_loading_widget()
         return loading_widget
+
+    def _watch__pointer_shape(self, pointer_shape: PointerShape) -> None:
+        self.app._set_pointer_shape(pointer_shape)
+
+    def update_pointer_shape(self) -> None:
+        """Get the screen's current pointer shape."""
+        if self._selecting:
+            self._pointer_shape = "text"
+            return
+        widget = self if self.app.mouse_over is None else self.app.mouse_over
+        pointer_shape = "default"
+        for node in widget.ancestors_with_self:
+            if isinstance(node, Widget):
+                if node.loading:
+                    pointer_shape = "wait"
+                    break
+                if (pointer_shape := node.styles.pointer) != "default":
+                    break
+
+        self._pointer_shape = pointer_shape
 
     def render(self) -> RenderableType:
         """Render method inherited from widget, used to render the screen's background.
@@ -650,8 +660,7 @@ class Screen(Generic[ScreenResultType], Widget):
         try:
             top_widget, top_region = next(widgets_under_coordinate)
         except StopIteration:
-            raise errors.NoWidget(
-                f"No hover widget under screen coordinate ({x}, {y})")
+            raise errors.NoWidget(f"No hover widget under screen coordinate ({x}, {y})")
         if not top_widget._has_hover_style:
             for widget, region in widgets_under_coordinate:
                 if widget._has_hover_style:
@@ -799,8 +808,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 node_is_visible = (
                     node_styles_visibility != "hidden"
                     if node_styles_visibility
-                    # Inherit visibility if the style is unset.
-                    else parent_visibility
+                    else parent_visibility  # Inherit visibility if the style is unset.
                 )
                 if node.is_container and node.allow_focus_children():
                     sorted_displayed_children = sorted(
@@ -842,8 +850,7 @@ class Screen(Generic[ScreenResultType], Widget):
         # If a widget is maximized we want to limit the focus chain to the visible widgets
         if self.maximized is not None:
             focusable = set(self.maximized.walk_children(with_self=True))
-            focus_chain = [
-                widget for widget in focus_chain if widget in focusable]
+            focus_chain = [widget for widget in focus_chain if widget in focusable]
 
         filtered_focus_chain = (
             node for node in focus_chain if match(selector_set, node)
@@ -1047,8 +1054,7 @@ class Screen(Generic[ScreenResultType], Widget):
         # removed, and which can receive focus, and go focus that.
         chosen: Widget | None = None
         for candidate in reversed(
-            focusable_widgets[widget_index + 1:] +
-                focusable_widgets[:widget_index]
+            focusable_widgets[widget_index + 1 :] + focusable_widgets[:widget_index]
         ):
             if candidate not in avoiding:
                 chosen = candidate
@@ -1119,8 +1125,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 # Change focus
                 self.focused = widget
                 # Send focus event
-                widget.post_message(events.Focus(
-                    from_app_focus=from_app_focus))
+                widget.post_message(events.Focus(from_app_focus=from_app_focus))
                 focused = widget
 
                 if scroll_visible:
@@ -1219,7 +1224,6 @@ class Screen(Generic[ScreenResultType], Widget):
                 self._repaint_required = True
                 self._compositor._dirty_regions.clear()
                 self._dirty_widgets.clear()
-
         app._update_mouse_over(self)
 
     def _on_timer_update(self) -> None:
@@ -1285,8 +1289,7 @@ class Screen(Generic[ScreenResultType], Widget):
             future: A Future to hold the result.
         """
         self._result_callbacks.append(
-            ResultCallback[Optional[ScreenResultType]](
-                requester, callback, future)
+            ResultCallback[Optional[ScreenResultType]](requester, callback, future)
         )
 
     async def _message_loop_exit(self) -> None:
@@ -1302,24 +1305,6 @@ class Screen(Generic[ScreenResultType], Widget):
     def _pop_result_callback(self) -> None:
         """Remove the latest result callback from the stack."""
         self._result_callbacks.pop()
-        
-    
-        
-    def _clear_graphic_region(self, widget: Widget) -> None:
-        cr = widget.content_region
-        if not cr:
-            return
-        
-        log(f"Limpando área gráfica: {widget} em {cr}")
-        
-        # Limpa com ESPAÇOS, não com SIXEL
-        for line in range(cr.height):
-            pos = f"\x1b[{cr.y + line + 1};{cr.x + 1}H"
-            blank_line = " " * cr.width
-            self.app._driver.write(pos + blank_line)
-        
-        self.app._driver.flush()
-        self._compositor.unregister_graphic_region(widget)
 
     def _refresh_layout(self, size: Size | None = None, scroll: bool = False) -> None:
         """Refresh the layout (can change size and positions of widgets)."""
@@ -1355,41 +1340,6 @@ class Screen(Generic[ScreenResultType], Widget):
                                         region.size, virtual_size, container_size
                                     )
                                 )
-                    compositor = self._compositor
-                    for widget in exposed_widgets:
-                        if widget in compositor._graphic_regions:
-                            repaint = getattr(
-                                widget, "_repaint_graphics", None)
-                            log("_refresh_layout if widget in compositor._graphic_regions")
-                            if repaint is not None:
-                                def check_and_repaint():
-                                    viewport_top = self.scroll_offset.y
-                                    viewport_bottom = viewport_top + self.size.height
-
-                                    for widget in self.walk_children():
-                                        if not getattr(widget, "preserve_graphics", False):
-                                            continue
-
-                                        virtual_region = widget.virtual_region
-                                        if not virtual_region:
-                                            continue
-                                            
-                                        widget_top = virtual_region.y
-                                        widget_bottom = widget_top + virtual_region.height
-                                        is_visible = not (widget_bottom <= viewport_top or widget_top >= viewport_bottom)
-
-                                        if is_visible:
-                                            if hasattr(widget, '_last_content_region'):
-                                                widget._last_content_region = None
-                                            
-                                            repaint = getattr(widget, "_repaint_graphics", None)
-                                            if repaint:
-                                                self.set_timer(0.50, repaint)
-                                        # else:
-                                        #     self._clear_graphic_region(widget)
-
-                                self.call_after_refresh(check_and_repaint)
-                                # self.set_timer(0.15, check_and_repaint)  
 
             else:
                 hidden, shown, resized = self._compositor.reflow(self, size)
@@ -1413,12 +1363,10 @@ class Screen(Generic[ScreenResultType], Widget):
                     _,
                     _,
                 ) in layers:
-                    widget._size_updated(
-                        region.size, virtual_size, container_size)
+                    widget._size_updated(region.size, virtual_size, container_size)
                     if widget in send_resize:
                         widget.post_message(
-                            ResizeEvent(region.size, virtual_size,
-                                        container_size)
+                            ResizeEvent(region.size, virtual_size, container_size)
                         )
 
                 for widget in shown:
@@ -1492,11 +1440,9 @@ class Screen(Generic[ScreenResultType], Widget):
         min_height = self.styles.min_height
         max_height = self.styles.max_height
         if min_height is not None:
-            inline_height = max(inline_height, int(
-                min_height.resolve(size, size)))
+            inline_height = max(inline_height, int(min_height.resolve(size, size)))
         if max_height is not None:
-            inline_height = min(inline_height, int(
-                max_height.resolve(size, size)))
+            inline_height = min(inline_height, int(max_height.resolve(size, size)))
         inline_height = min(self.app.size.height, inline_height)
         return inline_height
 
@@ -1504,24 +1450,6 @@ class Screen(Generic[ScreenResultType], Widget):
         """Called by App when the screen is resized."""
         if self.stack_updates and self.is_attached:
             self._refresh_layout(size)
-
-    def refresh(self, *, repaint: bool = True, layout: bool = False, refresh_bindings: bool = False, recompose=None) -> None:
-        super().refresh(repaint=repaint, layout=layout)
-        dirty_commands = []
-        for gr in self.graphics_regions.values():
-            if gr.dirty:
-                dirty_commands.append(gr.command)
-                gr.dirty = False
-        if dirty_commands:
-            graphics_update = GraphicsUpdate(
-                self,
-                segments=[],
-                graphics=dirty_commands
-            )
-            driver = self.app.sixel_driver
-            if driver:
-                driver.write_update(graphics_update)
-                log(f"Enviados {len(dirty_commands)} comandos gráficos sujos")
 
     def _on_screen_resume(self, event: events.ScreenResume) -> None:
         """Screen has resumed."""
@@ -1571,7 +1499,6 @@ class Screen(Generic[ScreenResultType], Widget):
     async def _on_resize(self, event: events.Resize) -> None:
         event.stop()
         self._screen_resized(event.size)
-
         for screen in self.app._background_screens:
             screen._screen_resized(event.size)
 
@@ -1697,12 +1624,12 @@ class Screen(Generic[ScreenResultType], Widget):
                     pass
         else:
             self.app._set_mouse_over(widget, hover_widget)
+            self.update_pointer_shape()
             widget.hover_style = event.style
             if widget is self:
                 self.post_message(event)
             else:
-                mouse_event = self._translate_mouse_move_event(
-                    event, widget, region)
+                mouse_event = self._translate_mouse_move_event(event, widget, region)
                 mouse_event._set_forwarded()
                 widget._forward_event(mouse_event)
 
@@ -1724,6 +1651,7 @@ class Screen(Generic[ScreenResultType], Widget):
                         )
                     else:
                         tooltip.display = False
+        self.screen.update_pointer_shape()
 
     @staticmethod
     def _translate_mouse_move_event(
@@ -1833,8 +1761,7 @@ class Screen(Generic[ScreenResultType], Widget):
                 self.set_focus(None)
             else:
                 if isinstance(event, events.MouseDown):
-                    focusable_widget = self.get_focusable_widget_at(
-                        event.x, event.y)
+                    focusable_widget = self.get_focusable_widget_at(event.x, event.y)
                     if (
                         focusable_widget is not None
                         and focusable_widget.focus_on_click()
@@ -1847,11 +1774,11 @@ class Screen(Generic[ScreenResultType], Widget):
                     event._set_forwarded()
                     self.post_message(event)
                 else:
-                    widget._forward_event(
-                        event._apply_offset(-region.x, -region.y))
+                    widget._forward_event(event._apply_offset(-region.x, -region.y))
 
         else:
             self.post_message(event)
+        self.update_pointer_shape()
 
     def _key_escape(self) -> None:
         self.clear_selection()

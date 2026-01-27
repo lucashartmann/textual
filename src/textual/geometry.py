@@ -170,7 +170,8 @@ class Offset(NamedTuple):
         """
         x1, y1 = self
         x2, y2 = other
-        distance: float = ((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) ** 0.5
+        distance: float = ((x2 - x1) * (x2 - x1) +
+                           (y2 - y1) * (y2 - y1)) ** 0.5
         return distance
 
     def clamp(self, width: int, height: int) -> Offset:
@@ -703,7 +704,8 @@ class Region(NamedTuple):
         try:
             ox, oy = point
         except Exception:
-            raise TypeError(f"a tuple of two integers is required, not {point!r}")
+            raise TypeError(
+                f"a tuple of two integers is required, not {point!r}")
         return (x2 > ox >= x1) and (y2 > oy >= y1)
 
     @lru_cache(maxsize=1024)

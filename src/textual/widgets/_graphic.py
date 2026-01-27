@@ -89,12 +89,3 @@ class Graphic(Widget):
             log(f"Erro ao gerar graphics: {e}")
 
         return []
-
-    def on_resize(self) -> None:
-        self.refresh(repaint=True, layout=True)
-
-    def on_mount(self) -> None:
-        self.refresh()
-
-    def _repaint_graphics(self) -> None:
-        self.refresh(repaint=True)

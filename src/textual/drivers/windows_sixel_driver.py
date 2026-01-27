@@ -56,8 +56,24 @@ class WindowsSixelDriver(WindowsDriver):
 
     def write(self, text: str) -> None:
         log("WindowsSixelDriver write chamado")
-        if self._graphics_region_active:
+
+        # Se não temos região ativa → escreve normal
+        if not self._graphics_region_active or self._graphics_region is None:
+            super().write(text)
             return
+
+        # Aqui: bloqueia comandos que limpam a região do sixel
+        # Exemplos comuns de clears ANSI:
+        if any(cmd in text for cmd in ["\x1b[2J", "\x1b[J", "\x1b[K", "\x1b[0J"]):
+            # Verifica se o clear afeta nossa região
+            # (simplificado: se for clear full screen, bloqueia)
+            if "\x1b[2J" in text or "\x1b[0J" in text:  # clear screen / from cursor down
+                log("WindowsSixelDriver: BLOQUEANDO clear full screen durante sixel ativo")
+                return  # não envia o clear
+
+            # Para clears parciais (\x1b[K = erase line), seria mais complexo
+            # Por enquanto, permite (pode causar artefatos leves, mas melhor que sumir)
+
         super().write(text)
 
     def _write_sixel(self, command: GraphicsCommand) -> None:

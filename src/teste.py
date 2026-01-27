@@ -10,6 +10,7 @@ from textual.widgets._image import Image
 from textual.containers import HorizontalGroup
 from textual.widgets import Static, Header
 
+
 class Teste(App):
     CSS = """
     Screen {
@@ -20,6 +21,9 @@ class Teste(App):
         width: 30;
         height: 15;
         margin: 2;
+    }
+    Region {
+        border: green;
     }
         """
 
@@ -33,13 +37,12 @@ class Teste(App):
         # yield Header()
         yield Image("SpongeBob_SquarePants_personagem.png", render_type=RenderType.SIXEL)
         # yield Image("SpongeBob_SquarePants_personagem.png")
-        
+
         yield Static("test")
         yield Static("test")
         yield Static("test")
         yield Static("test")
         yield Static("test")
-        
 
     # @on(events.Resize)
     # def _app_on_resize(self, event: events.Resize) -> None:

@@ -6,13 +6,12 @@ import numpy as np
 import threading
 from queue import Queue, Empty
 from PIL import Image as PILImage
-from textual import events, log, on
+from textual import events, on
 from textual.drivers.graphics import GraphicsCommand
 from textual.drivers.image_render import RenderType, get_renderer, draw
 from textual.widgets._graphic import Graphic
 from textual.binding import Binding, BindingType
 from typing import ClassVar
-from textual.drivers.windows_sixel_driver import WindowsSixelDriver
 
 try:
     import sounddevice as sd
@@ -218,10 +217,10 @@ class Video(Graphic):
         self.speed -= 0.1
 
     def action_more_fps(self):
-        self.speed += 0.1
+        self.target_fps += 0.1
 
     def action_less_fps(self):
-        self.speed -= 0.1
+        self.target_fps -= 0.1
 
     def action_loop(self):
         if self.loop:
@@ -556,9 +555,6 @@ class Video(Graphic):
                 self.pause()
 
         except Exception as e:
-            if hasattr(self, 'log'):
-                self.log(
-                    f"Erro decode frame {self._streaming_frame_index}: {e}")
             self.pause()
 
     @property

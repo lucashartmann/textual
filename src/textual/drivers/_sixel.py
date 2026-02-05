@@ -1,6 +1,5 @@
 from itertools import groupby
 from PIL import Image as PILImage
-from textual import log
 from typing import Iterable, Iterator, TypeVar
 
 T = TypeVar("T")
@@ -8,8 +7,10 @@ DCS = "\x1bP"
 ST = "\x1b\\"
 COLORS = 256
 
+
 def grouped(iterable: Iterable[T], n: int) -> Iterator[Iterable[T]]:
     return zip(*([iter(iterable)] * n), strict=True)
+
 
 def image_to_sixels_responsive(
     image: PILImage.Image,
@@ -19,11 +20,10 @@ def image_to_sixels_responsive(
     px_per_cell_y: int = 18
 ) -> str:
     target_w = cell_width * px_per_cell_x
-    target_h = cell_height * px_per_cell_y 
+    target_h = cell_height * px_per_cell_y
 
     img = image.resize((target_w, target_h), PILImage.Resampling.LANCZOS)
     w, h = img.size
-    log(f"Resize forçado para {w}x{h} pixels (para {cell_width}x{cell_height} células)")
 
     img = img.convert("P", palette=PILImage.Palette.ADAPTIVE, colors=COLORS)
 

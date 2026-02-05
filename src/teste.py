@@ -18,8 +18,8 @@ class VideoTestApp(App):
     }
     
     Image {
-        width: 50%;
-        height: 90%;
+        width: 20%;
+        height: 30%;
         border: brown;
     }
  
@@ -28,16 +28,19 @@ class VideoTestApp(App):
     def compose(self) -> ComposeResult:
         yield Header()
 
-        yield Video(
-            path="bob_esponja.mp4",
-            autoplay=False,
-            preload_frames=False,
-            render_type=RenderType.SIXEL,
-            speed=4,
-            audio_speed=0.8
-        )
+        # yield Video(
+        #     path="bob_esponja.mp4",
+        #     autoplay=False,
+        #     preload_frames=False,
+        #     render_type=RenderType.SIXEL,
+        #     speed=6.6,
+        #     audio_speed=0.8,
+        #     fps=30
+        # )
 
-        # yield Image(image="SpongeBob_SquarePants_personagem.png", render_type=RenderType.SIXEL)
+        yield Image(image="SpongeBob_SquarePants_personagem.png", render_type=RenderType.SIXEL)
+        yield Image(image="SpongeBob_SquarePants_personagem.png", render_type=RenderType.SIXEL)
+        yield Image(image="SpongeBob_SquarePants_personagem.png", render_type=RenderType.SIXEL)
 
         # yield Static("Teste")
 

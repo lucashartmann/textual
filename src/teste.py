@@ -29,7 +29,7 @@ class VideoTestApp(App):
         yield Header()
 
         yield Video(
-            path="bob_esponja.mp4",
+            path="World’s Most Dangerous Escape Room! [3jS_yEK8qVI].mp4",
             autoplay=False,
             preload_frames=False,
             render_type=RenderType.SIXEL,
